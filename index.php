@@ -2,6 +2,13 @@
 require_once __DIR__ . '/db.php';
 init_db();
 
+$MOTIVOS = [
+    "Cliente no contestó",
+    "Lo encontró más barato",
+    "Ya no lo necesita",
+    "Otro proveedor"
+];
+
 $path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 $path = str_replace('/farmacia_alertas_php', '', $path);
 
@@ -15,6 +22,9 @@ switch ($path) {
         break;
     case '/alertas/resolver':
         resolver_alerta();
+        break;
+    case '/no_venta':
+        registrar_no_venta();
         break;
     case '/justificaciones':
         show_justificaciones();
@@ -39,7 +49,7 @@ function show_panel() {
 
 function show_alertas() {
     $db = get_db();
-    $stmt = $db->prepare("SELECT * FROM alerta WHERE fecha_programada <= datetime('now') AND atendida = 0");
+    $stmt = $db->prepare("SELECT * FROM alerta WHERE fecha_programada <= NOW() AND atendida = 0");
     $stmt->execute();
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
     $tipos = [];
@@ -50,8 +60,9 @@ function show_alertas() {
 }
 
 function show_alertas_sucursal(int $sucursal_id) {
+    global $MOTIVOS;
     $db = get_db();
-    $stmt = $db->prepare("SELECT * FROM alerta WHERE sucursal_id = ? AND fecha_programada <= datetime('now') AND atendida = 0");
+    $stmt = $db->prepare("SELECT * FROM alerta WHERE sucursal_id = ? AND fecha_programada <= NOW() AND atendida = 0");
     $stmt->execute([$sucursal_id]);
     $alertas = $stmt->fetchAll(PDO::FETCH_ASSOC);
     include __DIR__ . '/views/alertas_sucursal.php';
@@ -66,17 +77,28 @@ function resolver_alerta() {
     header('Location: ' . ($_SERVER['HTTP_REFERER'] ?? '/alertas'));
 }
 
-function show_justificaciones() {
+function registrar_no_venta() {
+    global $MOTIVOS;
+    $alerta_id = $_POST['id'] ?? null;
+    $motivo    = $_POST['motivo'] ?? '';
+    if (!$alerta_id || !in_array($motivo, $MOTIVOS)) {
+        header('Location: /alertas');
+        exit;
+    }
     $db = get_db();
-    $motivos = [
-        "Cliente no contestó",
-        "Lo encontró más barato",
-        "Ya no lo necesita",
-        "Otro proveedor"
-    ];
+    $stmt = $db->prepare("INSERT INTO justificacion_no_venta (alerta_id, motivo) VALUES (?, ?)");
+    $stmt->execute([$alerta_id, $motivo]);
+    $upd  = $db->prepare("UPDATE alerta SET atendida = 1 WHERE id = ?");
+    $upd->execute([$alerta_id]);
+    header('Location: ' . ($_SERVER['HTTP_REFERER'] ?? '/alertas'));
+}
+
+function show_justificaciones() {
+    global $MOTIVOS;
+    $db = get_db();
     $registros = [];
-    foreach ($motivos as $m) {
-        $stmt = $db->prepare("SELECT * FROM justificacion_no_venta WHERE motivo = ?");
+    foreach ($MOTIVOS as $m) {
+        $stmt = $db->prepare("SELECT * FROM justificacion_no_venta WHERE motivo = ? ORDER BY fecha DESC");
         $stmt->execute([$m]);
         $registros[$m] = $stmt->fetchAll(PDO::FETCH_ASSOC);
     }

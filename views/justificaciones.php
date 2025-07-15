@@ -9,16 +9,18 @@
 <div class="container py-5">
     <h1 class="mb-4">📑 Justificaciones</h1>
     <?php foreach ($registros as $motivo => $lista): ?>
-        <h4 class="mt-4">
-            <?= htmlspecialchars($motivo) ?> (<?= count($lista) ?>)
-        </h4>
-        <ul class="list-group mb-3">
-        <?php foreach ($lista as $j): ?>
-            <li class="list-group-item">
-                Alerta ID: <?= $j['alerta_id'] ?>
-            </li>
-        <?php endforeach; ?>
-        </ul>
+        <details class="mb-3">
+            <summary><?= htmlspecialchars($motivo) ?> (<?= count($lista) ?>)</summary>
+            <ul class="list-group mt-2">
+            <?php foreach ($lista as $j): ?>
+                <li class="list-group-item">
+                    Alerta ID: <?= $j['alerta_id'] ?> <br>
+                    Motivo: <?= htmlspecialchars($j['motivo']) ?> <br>
+                    Fecha: <?= date('d/m/Y H:i', strtotime($j['fecha'])) ?>
+                </li>
+            <?php endforeach; ?>
+            </ul>
+        </details>
     <?php endforeach; ?>
 </div>
 </body>

@@ -14,7 +14,7 @@
                 <div class="card-body text-center">
                     <h3 class="card-title"><?= htmlspecialchars($total) ?></h3>
                     <p class="card-text">Alertas activas</p>
-                    <a href="/alertas" class="btn btn-primary w-100">Ver alertas</a>
+                    <a href="farmacia_alertas_php/alertas" class="btn btn-primary w-100">Ver alertas</a>
                 </div>
             </div>
         </div>
@@ -38,7 +38,7 @@
                 <div class="card-body text-center">
                     <h3 class="card-title"><?= htmlspecialchars($total_j) ?></h3>
                     <p class="card-text">Justificaciones registradas</p>
-                    <a href="/justificaciones" class="btn btn-success w-100">Ver justificaciones</a>
+                    <a href="farmacia_alertas_php/justificaciones" class="btn btn-success w-100">Ver justificaciones</a>
                 </div>
             </div>
         </div>
