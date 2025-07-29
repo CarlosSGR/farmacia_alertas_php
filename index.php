@@ -1,6 +1,5 @@
 <?php
 require_once __DIR__ . '/db.php';
-init_db();
 
 $MOTIVOS = [
     "Cliente no contestó",
@@ -49,15 +48,41 @@ function show_panel() {
 
 function show_alertas() {
     $db = get_db();
-    $stmt = $db->prepare("SELECT * FROM alerta WHERE fecha_programada <= NOW() AND atendida = 0");
-    $stmt->execute();
-    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $stmt = $db->query("
+        SELECT 
+            t1.INTCLIENTEID AS cliente_id,
+            tc.STRNOMBRE AS nombre,
+            tc.STRTELEFONO AS telefono,
+            ta.STRAMECOP AS codigo,
+            ta.STRNOMBRE AS producto,
+            t1.DTMFECHA AS fecha_ultima_compra,
+            '3' AS frecuencia_dias,
+            t1.INTIDSUCURSAL AS sucursal_id
+        FROM tblclsventa t1
+        INNER JOIN tblclsdetventa t2 ON t1.INTIDSUCURSAL = t2.INTIDSUCURSAL AND t1.INTNUMEROVENTA = t2.INTNUMEROVENTA
+        INNER JOIN tblclsarticulo ta ON t2.STRAMECOP = ta.STRAMECOP AND t2.INTIDSUCURSAL = ta.INTIDSUCURSAL
+        INNER JOIN tblclscliente tc ON t1.INTCLIENTEID = tc.INTCLIENTEID
+        WHERE t1.INTCLIENTEID <> 0
+        AND ta.STRSECTORID IN (70,88)
+        AND t1.DTMFECHA BETWEEN '2025-01-01' AND '2025-01-01 23:59:59'
+    ");
+    $resultados = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
     $tipos = [];
-    foreach ($rows as $row) {
-        $tipos[$row['tipo']][] = $row;
+
+    foreach ($resultados as $i => $row) {
+        $tipos['Recompra'][] = [
+            'id' => $row['cliente_id'], // Puedes usar cualquier identificador único
+            'tipo' => 'Recompra',
+            'mensaje' => "Llamar a {$row['nombre']} ({$row['telefono']}) para ofrecerle {$row['producto']}",
+            'fecha_programada' => date('Y-m-d') // O ajusta la lógica si quieres otra fecha
+        ];
     }
+
     include __DIR__ . '/views/alertas.php';
 }
+
 
 function show_alertas_sucursal(int $sucursal_id) {
     global $MOTIVOS;
