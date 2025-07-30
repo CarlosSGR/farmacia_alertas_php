@@ -49,7 +49,11 @@ function show_panel() {
 function show_alertas() {
     $db = get_db();
 
-    $stmt = $db->query("
+    // Rango de fechas de hace 30 a 27 días
+    $desde = date('Y-m-d', strtotime('-30 days'));
+    $hasta = date('Y-m-d', strtotime('-27 days'));
+
+    $stmt = $db->prepare("
         SELECT 
             t1.INTCLIENTEID AS cliente_id,
             tc.STRNOMBRE AS nombre,
@@ -57,7 +61,7 @@ function show_alertas() {
             ta.STRAMECOP AS codigo,
             ta.STRNOMBRE AS producto,
             t1.DTMFECHA AS fecha_ultima_compra,
-            '3' AS frecuencia_dias,
+            30 AS frecuencia_dias,
             t1.INTIDSUCURSAL AS sucursal_id
         FROM tblclsventa t1
         INNER JOIN tblclsdetventa t2 ON t1.INTIDSUCURSAL = t2.INTIDSUCURSAL AND t1.INTNUMEROVENTA = t2.INTNUMEROVENTA
@@ -65,23 +69,33 @@ function show_alertas() {
         INNER JOIN tblclscliente tc ON t1.INTCLIENTEID = tc.INTCLIENTEID
         WHERE t1.INTCLIENTEID <> 0
         AND ta.STRSECTORID IN (70,88)
-        AND t1.DTMFECHA BETWEEN '2025-01-01' AND '2025-01-01 23:59:59'
+        AND t1.DTMFECHA BETWEEN ? AND ?
     ");
-    $resultados = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $stmt->execute([$desde, $hasta]);
+    $ventas = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     $tipos = [];
+    $hoy = new DateTime();
+    $limite = (clone $hoy)->modify('+3 days');
 
-    foreach ($resultados as $i => $row) {
-        $tipos['Recompra'][] = [
-            'id' => $row['cliente_id'], // Puedes usar cualquier identificador único
-            'tipo' => 'Recompra',
-            'mensaje' => "Llamar a {$row['nombre']} ({$row['telefono']}) para ofrecerle {$row['producto']}",
-            'fecha_programada' => date('Y-m-d') // O ajusta la lógica si quieres otra fecha
-        ];
+    foreach ($ventas as $venta) {
+        // Fecha programada = fecha_ultima_compra + frecuencia_dias (30 días)
+        $fecha_programada = (new DateTime($venta['fecha_ultima_compra']))->modify('+30 days');
+
+        // Solo mostrar si la fecha programada está entre hoy y 3 días adelante
+        if ($fecha_programada >= $hoy && $fecha_programada <= $limite) {
+            $tipos['Recompra'][] = [
+                'id' => $venta['cliente_id'],
+                'tipo' => 'Recompra',
+                'mensaje' => "Llamar a {$venta['nombre']} ({$venta['telefono']}) para ofrecerle {$venta['producto']}",
+                'fecha_programada' => $fecha_programada->format('Y-m-d H:i:s')
+            ];
+        }
     }
 
     include __DIR__ . '/views/alertas.php';
 }
+
 
 
 function show_alertas_sucursal(int $sucursal_id) {
