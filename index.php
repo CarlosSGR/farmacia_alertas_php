@@ -19,6 +19,9 @@ switch ($path) {
     case '/alertas':
         show_alertas();
         break;
+    case '/generar_alertas':
+        generar_alertas();
+        break;
     case '/alertas/resolver':
         resolver_alerta();
         break;
@@ -41,80 +44,97 @@ switch ($path) {
 function show_panel() {
     $db = get_db();
     $total = $db->query("SELECT COUNT(*) FROM alerta WHERE atendida = 0")->fetchColumn();
-    $por_tipo = $db->query("SELECT tipo, COUNT(*) cnt FROM alerta WHERE atendida = 0 GROUP BY tipo")->fetchAll(PDO::FETCH_ASSOC);
+    $por_sucursal = $db->query("
+    SELECT sucursal_id, COUNT(*) AS cnt
+    FROM alerta
+    WHERE atendida = 0
+    GROUP BY sucursal_id
+    ")->fetchAll(PDO::FETCH_ASSOC);
     $total_j = $db->query("SELECT COUNT(*) FROM justificacion_no_venta")->fetchColumn();
     include __DIR__ . '/views/panel.php';
 }
 
 function show_alertas() {
     $db = get_db();
+    $hoy = date('Y-m-d');
+    $tres_dias = date('Y-m-d', strtotime('+3 days'));
 
-    // Rango de fechas de hace 30 a 27 días
-    $desde = date('Y-m-d', strtotime('-30 days'));
-    $hasta = date('Y-m-d', strtotime('-27 days'));
-
-    $stmt = $db->prepare("
-        SELECT 
-            t1.INTCLIENTEID AS cliente_id,
-            tc.STRNOMBRE AS nombre,
-            tc.STRTELEFONO AS telefono,
-            ta.STRAMECOP AS codigo,
-            ta.STRNOMBRE AS producto,
-            t1.DTMFECHA AS fecha_ultima_compra,
-            30 AS frecuencia_dias,
-            t1.INTIDSUCURSAL AS sucursal_id
-        FROM tblclsventa t1
-        INNER JOIN tblclsdetventa t2 ON t1.INTIDSUCURSAL = t2.INTIDSUCURSAL AND t1.INTNUMEROVENTA = t2.INTNUMEROVENTA
-        INNER JOIN tblclsarticulo ta ON t2.STRAMECOP = ta.STRAMECOP AND t2.INTIDSUCURSAL = ta.INTIDSUCURSAL
-        INNER JOIN tblclscliente tc ON t1.INTCLIENTEID = tc.INTCLIENTEID
-        WHERE t1.INTCLIENTEID <> 0
-        AND ta.STRSECTORID IN (70,88)
-        AND t1.DTMFECHA BETWEEN ? AND ?
-    ");
-    $stmt->execute([$desde, $hasta]);
-    $ventas = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $query = $db->prepare("SELECT * FROM alerta WHERE fecha_programada BETWEEN ? AND ? AND atendida = 0 ORDER BY fecha_programada ASC");
+    $query->execute([$hoy, $tres_dias]);
+    $alertas = $query->fetchAll(PDO::FETCH_ASSOC);
 
     $tipos = [];
-    $hoy = new DateTime();
-    $limite = (clone $hoy)->modify('+3 days');
-
-    foreach ($ventas as $venta) {
-        // Fecha programada = fecha_ultima_compra + frecuencia_dias (30 días)
-        $fecha_programada = (new DateTime($venta['fecha_ultima_compra']))->modify('+30 days');
-
-        // Solo mostrar si la fecha programada está entre hoy y 3 días adelante
-        if ($fecha_programada >= $hoy && $fecha_programada <= $limite) {
-            $tipos['Recompra'][] = [
-                'id' => $venta['cliente_id'],
-                'tipo' => 'Recompra',
-                'mensaje' => "Llamar a {$venta['nombre']} ({$venta['telefono']}) para ofrecerle {$venta['producto']}",
-                'fecha_programada' => $fecha_programada->format('Y-m-d H:i:s')
-            ];
-        }
+    foreach ($alertas as $a) {
+        $tipos[$a['tipo']][] = $a;
     }
 
     include __DIR__ . '/views/alertas.php';
 }
 
 
+function generar_alertas() {
+    $db = get_db();
+
+    $desde = date('Y-m-d', strtotime('-30 days'));
+    $hasta = date('Y-m-d', strtotime('-27 days'));
+
+    $stmt = $db->prepare("SELECT ...");
+    $stmt->execute([$desde, $hasta]);
+    $ventas = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    foreach ($ventas as $venta) {
+        $fecha_programada = (new DateTime($venta['fecha_ultima_compra']))->modify('+30 days')->format('Y-m-d H:i:s');
+        $mensaje = "Llamar a {$venta['nombre']} ({$venta['telefono']}) para ofrecerle {$venta['producto']}";
+
+        $insert = $db->prepare("
+            INSERT IGNORE INTO alerta (tipo, mensaje, fecha_programada, sucursal_id, destinatario)
+            VALUES (?, ?, ?, ?, ?)
+        ");
+        $insert->execute([
+            'Recompra',
+            $mensaje,
+            $fecha_programada,
+            $venta['sucursal_id'],
+            $venta['nombre']
+        ]);
+    }
+
+    echo "Alertas generadas.";
+}
+
 
 function show_alertas_sucursal(int $sucursal_id) {
     global $MOTIVOS;
     $db = get_db();
-    $stmt = $db->prepare("SELECT * FROM alerta WHERE sucursal_id = ? AND fecha_programada <= NOW() AND atendida = 0");
-    $stmt->execute([$sucursal_id]);
+
+    $hoy = date('Y-m-d');
+    $tres_dias = date('Y-m-d', strtotime('+3 days'));
+
+    $stmt = $db->prepare("
+        SELECT * FROM alerta
+        WHERE sucursal_id = ?
+        AND fecha_programada BETWEEN ? AND ?
+        AND atendida = 0
+        ORDER BY fecha_programada ASC
+    ");
+    $stmt->execute([$sucursal_id, $hoy, $tres_dias]);
     $alertas = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
     include __DIR__ . '/views/alertas_sucursal.php';
 }
+
 
 function resolver_alerta() {
     $id = $_POST['id'] ?? null;
     if (!$id) { header('Location: /alertas'); exit; }
+
     $db = get_db();
     $stmt = $db->prepare("UPDATE alerta SET atendida = 1 WHERE id = ?");
     $stmt->execute([$id]);
+
     header('Location: ' . ($_SERVER['HTTP_REFERER'] ?? '/alertas'));
 }
+
 
 function registrar_no_venta() {
     global $MOTIVOS;
@@ -132,15 +152,23 @@ function registrar_no_venta() {
     header('Location: ' . ($_SERVER['HTTP_REFERER'] ?? '/alertas'));
 }
 
+
 function show_justificaciones() {
     global $MOTIVOS;
     $db = get_db();
     $registros = [];
+
     foreach ($MOTIVOS as $m) {
-        $stmt = $db->prepare("SELECT * FROM justificacion_no_venta WHERE motivo = ? ORDER BY fecha DESC");
+        $stmt = $db->prepare("
+            SELECT * FROM justificacion_no_venta 
+            WHERE motivo = ? 
+            ORDER BY fecha DESC
+        ");
         $stmt->execute([$m]);
         $registros[$m] = $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
+
     include __DIR__ . '/views/justificaciones.php';
 }
+
 ?>

@@ -34,11 +34,11 @@
                     <?= date('d/m/Y H:i', strtotime($a['fecha_programada'])) ?>
                 </small>
             </div>
-            <form action="/alertas/resolver" method="post" class="m-0 me-2">
+            <form action="/farmacia_alertas_php/alertas/resolver" method="post" class="m-0 me-2">
                 <input type="hidden" name="id" value="<?= $a['id'] ?>">
                 <button type="submit" class="btn btn-sm btn-success">✅</button>
             </form>
-            <form action="/no_venta" method="post" class="d-flex gap-2 m-0">
+            <form action="/farmacia_alertas_php/no_venta" method="post" class="d-flex gap-2 m-0">
                 <input type="hidden" name="id" value="<?= $a['id'] ?>">
                 <select name="motivo" class="form-select form-select-sm">
                     <?php foreach ($MOTIVOS as $m): ?>

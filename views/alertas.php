@@ -20,7 +20,7 @@
                         </div>
                         <div class="d-flex gap-2 align-items-center">
                             <span class="badge bg-warning text-dark">Pendiente</span>
-                            <form action="/alertas/resolver" method="post" class="m-0">
+                            <form action="./alertas/resolver" method="post" class="m-0">
                                 <input type="hidden" name="id" value="<?= $alerta['id'] ?>">
                                 <button type="submit" class="btn btn-sm btn-success">✅</button>
                             </form>

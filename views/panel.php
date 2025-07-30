@@ -21,18 +21,33 @@
         <div class="col-md-4">
             <div class="card shadow-sm">
                 <div class="card-body">
-                    <h5 class="card-title">Alertas por tipo</h5>
+                    <h5 class="card-title">Alertas por sucursal</h5>
                     <ul class="list-group">
-                        <?php foreach ($por_tipo as $row): ?>
-                          <li class="list-group-item d-flex justify-content-between">
-                            <?= htmlspecialchars($row['tipo']) ?>
+                        <?php 
+                            $nombres = [
+                                1 => 'Matriz',
+                                2 => 'Tampico',
+                                4 => 'Ampliacion',
+                                13 => 'Ejercito Mexicano',
+                                16 => 'Curva Texas',
+                                6 => 'Civil'
+                            ];
+                            foreach ($por_sucursal as $row):
+                                $id = $row['sucursal_id'];
+                                $nombre = $nombres[$id] ?? "Sucursal #{$id}";
+                        ?>
+                        <li class="list-group-item d-flex justify-content-between">
+                            <a href="farmacia_alertas_php/alertas_sucursal/<?= $id ?>" class="text-decoration-none">
+                                <?= htmlspecialchars($nombre) ?>
+                            </a>
                             <span class="badge bg-secondary"><?= $row['cnt'] ?></span>
-                          </li>
+                        </li>
                         <?php endforeach; ?>
                     </ul>
                 </div>
             </div>
         </div>
+
         <div class="col-md-4">
             <div class="card shadow-sm">
                 <div class="card-body text-center">
