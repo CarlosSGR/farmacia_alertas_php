@@ -56,13 +56,64 @@ function show_panel() {
 
 function show_alertas() {
     $db = get_db();
+
+    // Paso 1: consultar ventas entre hace 30 y 27 días
+    $desde = date('Y-m-d', strtotime('-30 days'));
+    $hasta = date('Y-m-d', strtotime('-27 days'));
+
+    $stmt = $db->prepare("
+        SELECT 
+            t1.INTCLIENTEID AS cliente_id,
+            tc.STRNOMBRE AS nombre,
+            tc.STRTELEFONO AS telefono,
+            ta.STRAMECOP AS codigo,
+            ta.STRNOMBRE AS producto,
+            t1.DTMFECHA AS fecha_ultima_compra,
+            30 AS frecuencia_dias,
+            t1.INTIDSUCURSAL AS sucursal_id
+        FROM tblclsventa t1
+        INNER JOIN tblclsdetventa t2 ON t1.INTIDSUCURSAL = t2.INTIDSUCURSAL AND t1.INTNUMEROVENTA = t2.INTNUMEROVENTA
+        INNER JOIN tblclsarticulo ta ON t2.STRAMECOP = ta.STRAMECOP AND t2.INTIDSUCURSAL = ta.INTIDSUCURSAL
+        INNER JOIN tblclscliente tc ON t1.INTCLIENTEID = tc.INTCLIENTEID
+        WHERE t1.INTCLIENTEID <> 0
+        AND ta.STRSECTORID IN (70,88)
+        AND t1.DTMFECHA BETWEEN ? AND ?
+    ");
+    $stmt->execute([$desde, $hasta]);
+    $ventas = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // Paso 2: registrar alertas si no existen aún
+    foreach ($ventas as $venta) {
+        $fecha_programada = (new DateTime($venta['fecha_ultima_compra']))->modify('+30 days')->format('Y-m-d H:i:s');
+        $mensaje = "Llamar a {$venta['nombre']} ({$venta['telefono']}) para ofrecerle {$venta['producto']}";
+
+        $insert = $db->prepare("
+            INSERT IGNORE INTO alerta (tipo, mensaje, fecha_programada, sucursal_id, destinatario)
+            VALUES (?, ?, ?, ?, ?)
+        ");
+        $insert->execute([
+            'Recompra',
+            $mensaje,
+            $fecha_programada,
+            $venta['sucursal_id'],
+            $venta['nombre']
+        ]);
+    }
+
+    // Paso 3: obtener alertas activas (entre hoy y 3 días)
     $hoy = date('Y-m-d');
     $tres_dias = date('Y-m-d', strtotime('+3 days'));
 
-    $query = $db->prepare("SELECT * FROM alerta WHERE fecha_programada BETWEEN ? AND ? AND atendida = 0 ORDER BY fecha_programada ASC");
+    $query = $db->prepare("
+        SELECT * FROM alerta
+        WHERE fecha_programada BETWEEN ? AND ?
+        AND atendida = 0
+        ORDER BY fecha_programada ASC
+    ");
     $query->execute([$hoy, $tres_dias]);
     $alertas = $query->fetchAll(PDO::FETCH_ASSOC);
 
+    // Agrupar por tipo
     $tipos = [];
     foreach ($alertas as $a) {
         $tipos[$a['tipo']][] = $a;
