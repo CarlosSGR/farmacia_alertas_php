@@ -3,6 +3,7 @@ require_once __DIR__ . '/db.php';
 
 $MOTIVOS = [
     "Cliente no contestó",
+    "Cliente contestó pido reprogramar",
     "Lo encontró más barato",
     "Ya no lo necesita",
     "Otro proveedor"
@@ -57,8 +58,9 @@ function show_panel() {
 function show_alertas() {
     $db = get_db();
 
-    $desde = date('Y-m-d', strtotime('-30 days'));
-    $hasta = date('Y-m-d', strtotime('-27 days'));
+    $desde = (new DateTime('first day of last month'))->format('Y-m-d');
+    $hasta = (new DateTime('first day of last month'))->modify('+2 days')->format('Y-m-d');
+
 
     $stmt = $db->prepare("
         SELECT 
@@ -101,8 +103,9 @@ function show_alertas() {
                 $fecha_programada,
                 $venta['sucursal_id'],
                 $venta['cliente_id'],
-                $alerta_id
+                $alerta_id // ✅ Ahora va en el campo correcto
             ]);
+
         }
     }
 
@@ -158,7 +161,7 @@ function resolver_alerta() {
     }
 
     $db = get_db();
-    $stmt = $db->prepare("UPDATE alerta SET atendida = 1, fecha_atendida = NOW() WHERE id = ?");
+    $stmt = $db->prepare("UPDATE alerta SET atendida = 1, fecha_atendida = NOW() WHERE alerta_id = ?");
     $stmt->execute([$id]);
 
     header('Location: ' . ($_SERVER['HTTP_REFERER'] ?? '/alertas'));
@@ -175,7 +178,8 @@ function registrar_no_venta() {
     $db = get_db();
     $stmt = $db->prepare("INSERT INTO justificacion_no_venta (alerta_id, motivo) VALUES (?, ?)");
     $stmt->execute([$alerta_id, $motivo]);
-    $upd = $db->prepare("UPDATE alerta SET atendida = 1, fecha_atendida = NOW() WHERE id = ?");
+
+    $upd = $db->prepare("UPDATE alerta SET atendida = 1, fecha_atendida = NOW() WHERE alerta_id = ?");
     $upd->execute([$alerta_id]);
     header('Location: ' . ($_SERVER['HTTP_REFERER'] ?? '/alertas'));
 }
@@ -187,9 +191,17 @@ function show_justificaciones() {
 
     foreach ($MOTIVOS as $m) {
         $stmt = $db->prepare("
-            SELECT * FROM justificacion_no_venta 
-            WHERE motivo = ? 
-            ORDER BY fecha DESC
+            SELECT j.*, 
+                   a.cliente_id, 
+                   c.STRNOMBRE AS cliente_nombre, 
+                   c.STRTELEFONO AS cliente_telefono,
+                   ta.STRNOMBRE AS producto
+            FROM justificacion_no_venta j
+            INNER JOIN alerta a ON j.alerta_id = a.alerta_id
+            INNER JOIN tblclscliente c ON a.cliente_id = c.INTCLIENTEID
+            INNER JOIN tblclsarticulo ta ON a.mensaje LIKE CONCAT('%', ta.STRNOMBRE, '%') AND ta.INTIDSUCURSAL = a.sucursal_id
+            WHERE j.motivo = ?
+            ORDER BY j.fecha DESC
         ");
         $stmt->execute([$m]);
         $registros[$m] = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -197,4 +209,6 @@ function show_justificaciones() {
 
     include __DIR__ . '/views/justificaciones.php';
 }
+
+
 ?>

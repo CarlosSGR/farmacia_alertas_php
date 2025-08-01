@@ -14,9 +14,10 @@
             <ul class="list-group mt-2">
             <?php foreach ($lista as $j): ?>
                 <li class="list-group-item">
-                    Alerta ID: <?= $j['alerta_id'] ?> <br>
+                    Cliente: <?= htmlspecialchars($j['cliente_nombre']) ?> <br>
+                    Teléfono: <?= htmlspecialchars($j['cliente_telefono']) ?> <br>
                     Motivo: <?= htmlspecialchars($j['motivo']) ?> <br>
-                    Fecha: <?= date('d/m/Y H:i', strtotime($j['fecha'])) ?>
+                    Producto: <?= htmlspecialchars($j['producto']) ?>
                 </li>
             <?php endforeach; ?>
             </ul>

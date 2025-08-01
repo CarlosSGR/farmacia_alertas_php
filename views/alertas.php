@@ -6,6 +6,7 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body class="bg-light">
+    
 <div class="container py-5">
     <h1 class="mb-4">📢 Alertas Activas</h1>
     <?php if ($tipos): ?>
@@ -21,7 +22,7 @@
                         <div class="d-flex gap-2 align-items-center">
                             <span class="badge bg-warning text-dark">Pendiente</span>
                             <form action="./alertas/resolver" method="post" class="m-0">
-                                <input type="hidden" name="id" value="<?= $alerta['id'] ?>">
+                                <input type="hidden" name="id" value="<?= $alerta['alerta_id'] ?>">
                                 <button type="submit" class="btn btn-sm btn-success">✅</button>
                             </form>
                         </div>

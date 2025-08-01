@@ -31,15 +31,17 @@
             <div>
                 <?= htmlspecialchars($a['mensaje']) ?><br>
                 <small class="text-muted">
-                    <?= date('d/m/Y H:i', strtotime($a['fecha_programada'])) ?>
+                    <small class="text-muted">
+                        <strong>Fecha Próxima Llamada:</strong> <?= date('d/m/Y', strtotime($a['fecha_programada'])) ?>
+                    </small>
                 </small>
             </div>
             <form action="/farmacia_alertas_php/alertas/resolver" method="post" class="m-0 me-2">
-                <input type="hidden" name="id" value="<?= $a['id'] ?>">
+                <input type="hidden" name="id" value="<?= $a['alerta_id'] ?>">
                 <button type="submit" class="btn btn-sm btn-success">✅</button>
             </form>
             <form action="/farmacia_alertas_php/no_venta" method="post" class="d-flex gap-2 m-0">
-                <input type="hidden" name="id" value="<?= $a['id'] ?>">
+                <input type="hidden" name="id" value="<?= $a['alerta_id'] ?>">
                 <select name="motivo" class="form-select form-select-sm">
                     <?php foreach ($MOTIVOS as $m): ?>
                         <option value="<?= htmlspecialchars($m) ?>"><?= htmlspecialchars($m) ?></option>
