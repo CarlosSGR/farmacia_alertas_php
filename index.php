@@ -57,7 +57,6 @@ function show_panel() {
 function show_alertas() {
     $db = get_db();
 
-    // Paso 1: consultar ventas entre hace 30 y 27 días
     $desde = date('Y-m-d', strtotime('-30 days'));
     $hasta = date('Y-m-d', strtotime('-27 days'));
 
@@ -82,25 +81,31 @@ function show_alertas() {
     $stmt->execute([$desde, $hasta]);
     $ventas = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // Paso 2: registrar alertas si no existen aún
     foreach ($ventas as $venta) {
         $fecha_programada = (new DateTime($venta['fecha_ultima_compra']))->modify('+30 days')->format('Y-m-d H:i:s');
         $mensaje = "Llamar a {$venta['nombre']} ({$venta['telefono']}) para ofrecerle {$venta['producto']}";
 
-        $insert = $db->prepare("
-            INSERT IGNORE INTO alerta (tipo, mensaje, fecha_programada, sucursal_id, destinatario)
-            VALUES (?, ?, ?, ?, ?)
-        ");
-        $insert->execute([
-            'Recompra',
-            $mensaje,
-            $fecha_programada,
-            $venta['sucursal_id'],
-            $venta['nombre']
-        ]);
+        $alerta_id = md5("{$venta['cliente_id']}-{$venta['codigo']}-{$fecha_programada}-Recompra");
+
+        $check = $db->prepare("SELECT COUNT(*) FROM alerta WHERE alerta_id = ?");
+        $check->execute([$alerta_id]);
+
+        if ($check->fetchColumn() == 0) {
+            $insert = $db->prepare("
+                INSERT INTO alerta (tipo, mensaje, fecha_programada, sucursal_id, cliente_id, alerta_id, atendida)
+                VALUES (?, ?, ?, ?, ?, ?, 0)
+            ");
+            $insert->execute([
+                'Recompra',
+                $mensaje,
+                $fecha_programada,
+                $venta['sucursal_id'],
+                $venta['cliente_id'],
+                $alerta_id
+            ]);
+        }
     }
 
-    // Paso 3: obtener alertas activas (entre hoy y 3 días)
     $hoy = date('Y-m-d');
     $tres_dias = date('Y-m-d', strtotime('+3 days'));
 
@@ -113,7 +118,6 @@ function show_alertas() {
     $query->execute([$hoy, $tres_dias]);
     $alertas = $query->fetchAll(PDO::FETCH_ASSOC);
 
-    // Agrupar por tipo
     $tipos = [];
     foreach ($alertas as $a) {
         $tipos[$a['tipo']][] = $a;
@@ -122,37 +126,9 @@ function show_alertas() {
     include __DIR__ . '/views/alertas.php';
 }
 
-
 function generar_alertas() {
-    $db = get_db();
-
-    $desde = date('Y-m-d', strtotime('-30 days'));
-    $hasta = date('Y-m-d', strtotime('-27 days'));
-
-    $stmt = $db->prepare("SELECT ...");
-    $stmt->execute([$desde, $hasta]);
-    $ventas = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-    foreach ($ventas as $venta) {
-        $fecha_programada = (new DateTime($venta['fecha_ultima_compra']))->modify('+30 days')->format('Y-m-d H:i:s');
-        $mensaje = "Llamar a {$venta['nombre']} ({$venta['telefono']}) para ofrecerle {$venta['producto']}";
-
-        $insert = $db->prepare("
-            INSERT IGNORE INTO alerta (tipo, mensaje, fecha_programada, sucursal_id, destinatario)
-            VALUES (?, ?, ?, ?, ?)
-        ");
-        $insert->execute([
-            'Recompra',
-            $mensaje,
-            $fecha_programada,
-            $venta['sucursal_id'],
-            $venta['nombre']
-        ]);
-    }
-
-    echo "Alertas generadas.";
+    show_alertas(); // Ahora reutiliza la lógica de show_alertas
 }
-
 
 function show_alertas_sucursal(int $sucursal_id) {
     global $MOTIVOS;
@@ -174,23 +150,24 @@ function show_alertas_sucursal(int $sucursal_id) {
     include __DIR__ . '/views/alertas_sucursal.php';
 }
 
-
 function resolver_alerta() {
     $id = $_POST['id'] ?? null;
-    if (!$id) { header('Location: /alertas'); exit; }
+    if (!$id) {
+        header('Location: /alertas');
+        exit;
+    }
 
     $db = get_db();
-    $stmt = $db->prepare("UPDATE alerta SET atendida = 1 WHERE id = ?");
+    $stmt = $db->prepare("UPDATE alerta SET atendida = 1, fecha_atendida = NOW() WHERE id = ?");
     $stmt->execute([$id]);
 
     header('Location: ' . ($_SERVER['HTTP_REFERER'] ?? '/alertas'));
 }
 
-
 function registrar_no_venta() {
     global $MOTIVOS;
     $alerta_id = $_POST['id'] ?? null;
-    $motivo    = $_POST['motivo'] ?? '';
+    $motivo = $_POST['motivo'] ?? '';
     if (!$alerta_id || !in_array($motivo, $MOTIVOS)) {
         header('Location: /alertas');
         exit;
@@ -198,11 +175,10 @@ function registrar_no_venta() {
     $db = get_db();
     $stmt = $db->prepare("INSERT INTO justificacion_no_venta (alerta_id, motivo) VALUES (?, ?)");
     $stmt->execute([$alerta_id, $motivo]);
-    $upd  = $db->prepare("UPDATE alerta SET atendida = 1 WHERE id = ?");
+    $upd = $db->prepare("UPDATE alerta SET atendida = 1, fecha_atendida = NOW() WHERE id = ?");
     $upd->execute([$alerta_id]);
     header('Location: ' . ($_SERVER['HTTP_REFERER'] ?? '/alertas'));
 }
-
 
 function show_justificaciones() {
     global $MOTIVOS;
@@ -221,5 +197,4 @@ function show_justificaciones() {
 
     include __DIR__ . '/views/justificaciones.php';
 }
-
 ?>
