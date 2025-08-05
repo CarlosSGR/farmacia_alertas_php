@@ -6,7 +6,7 @@ $MOTIVOS = [
     "Cliente contestó pido reprogramar",
     "Lo encontró más barato",
     "Ya no lo necesita",
-    "Otro proveedor"
+    "Otro proveedor",
 ];
 
 $path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
@@ -32,10 +32,7 @@ switch ($path) {
     case '/justificaciones':
         show_justificaciones();
         break;
-    default:
-        if (preg_match('#^/alertas_sucursal/(\d+)$#', $path, $m)) {
-            show_alertas_sucursal((int)$m[1]);
-        } else {
+@@ -39,176 +39,216 @@ switch ($path) {
             http_response_code(404);
             echo 'Not Found';
         }
@@ -61,9 +58,8 @@ function show_alertas() {
     $desde = (new DateTime('first day of last month'))->format('Y-m-d');
     $hasta = (new DateTime('first day of last month'))->modify('+2 days')->format('Y-m-d');
 
-
     $stmt = $db->prepare("
-        SELECT 
+        SELECT
             t1.INTCLIENTEID AS cliente_id,
             tc.STRNOMBRE AS nombre,
             tc.STRTELEFONO AS telefono,
@@ -94,18 +90,18 @@ function show_alertas() {
 
         if ($check->fetchColumn() == 0) {
             $insert = $db->prepare("
-                INSERT INTO alerta (tipo, mensaje, fecha_programada, sucursal_id, cliente_id, alerta_id, atendida)
-                VALUES (?, ?, ?, ?, ?, ?, 0)
+                INSERT INTO alerta (tipo, mensaje, producto, fecha_programada, sucursal_id, cliente_id, alerta_id, atendida)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 0)
             ");
             $insert->execute([
                 'Recompra',
                 $mensaje,
+                $venta['producto'],
                 $fecha_programada,
                 $venta['sucursal_id'],
                 $venta['cliente_id'],
-                $alerta_id // ✅ Ahora va en el campo correcto
+                $alerta_id
             ]);
-
         }
     }
 
@@ -113,24 +109,43 @@ function show_alertas() {
     $tres_dias = date('Y-m-d', strtotime('+3 days'));
 
     $query = $db->prepare("
-        SELECT * FROM alerta
-        WHERE fecha_programada BETWEEN ? AND ?
-        AND atendida = 0
+        SELECT 
+            a.tipo,
+            a.cliente_id,
+            c.STRNOMBRE AS nombre,
+            c.STRTELEFONO AS telefono,
+            GROUP_CONCAT(a.producto ORDER BY a.producto SEPARATOR '||') AS productos_raw,
+            GROUP_CONCAT(a.alerta_id ORDER BY a.producto SEPARATOR '||') AS alertas_raw,
+            MIN(a.fecha_programada) AS fecha_programada
+        FROM alerta a
+        INNER JOIN tblclscliente c ON a.cliente_id = c.INTCLIENTEID
+        WHERE a.fecha_programada BETWEEN ? AND ?
+          AND a.atendida = 0
+        GROUP BY a.tipo, a.cliente_id
         ORDER BY fecha_programada ASC
     ");
     $query->execute([$hoy, $tres_dias]);
-    $alertas = $query->fetchAll(PDO::FETCH_ASSOC);
+    $rows = $query->fetchAll(PDO::FETCH_ASSOC);
 
     $tipos = [];
-    foreach ($alertas as $a) {
-        $tipos[$a['tipo']][] = $a;
+    foreach ($rows as $row) {
+        $productos = explode('||', $row['productos_raw']);
+        $ids = explode('||', $row['alertas_raw']);
+        $items = [];
+        foreach ($productos as $i => $p) {
+            $items[] = ['producto' => $p, 'alerta_id' => $ids[$i] ?? null];
+        }
+        $row['productos'] = implode(', ', $productos);
+        $row['items'] = $items;
+        unset($row['productos_raw'], $row['alertas_raw']);
+        $tipos[$row['tipo']][] = $row;
     }
 
     include __DIR__ . '/views/alertas.php';
 }
 
 function generar_alertas() {
-    show_alertas(); // Ahora reutiliza la lógica de show_alertas
+    show_alertas();
 }
 
 function show_alertas_sucursal(int $sucursal_id) {
@@ -141,14 +156,37 @@ function show_alertas_sucursal(int $sucursal_id) {
     $tres_dias = date('Y-m-d', strtotime('+3 days'));
 
     $stmt = $db->prepare("
-        SELECT * FROM alerta
-        WHERE sucursal_id = ?
-        AND fecha_programada BETWEEN ? AND ?
-        AND atendida = 0
+        SELECT 
+            a.cliente_id,
+            c.STRNOMBRE AS nombre,
+            c.STRTELEFONO AS telefono,
+            GROUP_CONCAT(a.producto ORDER BY a.producto SEPARATOR '||') AS productos_raw,
+            GROUP_CONCAT(a.alerta_id ORDER BY a.producto SEPARATOR '||') AS alertas_raw,
+            MIN(a.fecha_programada) AS fecha_programada
+        FROM alerta a
+        INNER JOIN tblclscliente c ON a.cliente_id = c.INTCLIENTEID
+        WHERE a.sucursal_id = ?
+          AND a.fecha_programada BETWEEN ? AND ?
+          AND a.atendida = 0
+        GROUP BY a.cliente_id
         ORDER BY fecha_programada ASC
     ");
     $stmt->execute([$sucursal_id, $hoy, $tres_dias]);
-    $alertas = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $alertas = [];
+    foreach ($rows as $row) {
+        $productos = explode('||', $row['productos_raw']);
+        $ids = explode('||', $row['alertas_raw']);
+        $items = [];
+        foreach ($productos as $i => $p) {
+            $items[] = ['producto' => $p, 'alerta_id' => $ids[$i] ?? null];
+        }
+        $row['productos'] = implode(', ', $productos);
+        $row['items'] = $items;
+        unset($row['productos_raw'], $row['alertas_raw']);
+        $alertas[] = $row;
+    }
 
     include __DIR__ . '/views/alertas_sucursal.php';
 }
@@ -191,15 +229,14 @@ function show_justificaciones() {
 
     foreach ($MOTIVOS as $m) {
         $stmt = $db->prepare("
-            SELECT j.*, 
-                   a.cliente_id, 
-                   c.STRNOMBRE AS cliente_nombre, 
+            SELECT j.*,
+                   a.cliente_id,
+                   c.STRNOMBRE AS cliente_nombre,
                    c.STRTELEFONO AS cliente_telefono,
-                   ta.STRNOMBRE AS producto
+                   a.producto
             FROM justificacion_no_venta j
             INNER JOIN alerta a ON j.alerta_id = a.alerta_id
             INNER JOIN tblclscliente c ON a.cliente_id = c.INTCLIENTEID
-            INNER JOIN tblclsarticulo ta ON a.mensaje LIKE CONCAT('%', ta.STRNOMBRE, '%') AND ta.INTIDSUCURSAL = a.sucursal_id
             WHERE j.motivo = ?
             ORDER BY j.fecha DESC
         ");
@@ -210,5 +247,5 @@ function show_justificaciones() {
     include __DIR__ . '/views/justificaciones.php';
 }
 
-
 ?>
+

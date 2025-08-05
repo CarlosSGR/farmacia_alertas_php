@@ -26,31 +26,34 @@
 
     <?php if ($alertas): ?>
     <ul class="list-group mb-3">
-    <?php foreach ($alertas as $a): ?>
-        <li class="list-group-item d-flex justify-content-between align-items-center">
+        <?php foreach ($alertas as $a): ?>
+        <li class="list-group-item">
             <div>
-                <?= htmlspecialchars($a['mensaje']) ?><br>
-                <small class="text-muted">
-                    <small class="text-muted">
-                        <strong>Fecha Próxima Llamada:</strong> <?= date('d/m/Y', strtotime($a['fecha_programada'])) ?>
-                    </small>
-                </small>
+                <strong><?= htmlspecialchars($a['nombre']) ?></strong>
+                (<?= htmlspecialchars($a['telefono']) ?>)<br>
+                <small class="text-muted">Productos: <?= htmlspecialchars($a['productos']) ?></small><br>
+                <small class="text-muted"><strong>Fecha Próxima Llamada:</strong> <?= date('d/m/Y', strtotime($a['fecha_programada'])) ?></small>
             </div>
-            <form action="/farmacia_alertas_php/alertas/resolver" method="post" class="m-0 me-2">
-                <input type="hidden" name="id" value="<?= $a['alerta_id'] ?>">
-                <button type="submit" class="btn btn-sm btn-success">✅</button>
-            </form>
-            <form action="/farmacia_alertas_php/no_venta" method="post" class="d-flex gap-2 m-0">
-                <input type="hidden" name="id" value="<?= $a['alerta_id'] ?>">
-                <select name="motivo" class="form-select form-select-sm">
-                    <?php foreach ($MOTIVOS as $m): ?>
-                        <option value="<?= htmlspecialchars($m) ?>"><?= htmlspecialchars($m) ?></option>
-                    <?php endforeach; ?>
-                </select>
-                <button type="submit" class="btn btn-sm btn-danger">❌</button>
-            </form>
+            <?php foreach ($a['items'] as $item): ?>
+            <div class="d-flex align-items-center mt-2 gap-2">
+                <span class="me-2"><?= htmlspecialchars($item['producto']) ?></span>
+                <form action="/farmacia_alertas_php/alertas/resolver" method="post" class="m-0">
+                    <input type="hidden" name="id" value="<?= $item['alerta_id'] ?>">
+                    <button type="submit" class="btn btn-sm btn-success">✅</button>
+                </form>
+                <form action="/farmacia_alertas_php/no_venta" method="post" class="d-flex gap-2 m-0">
+                    <input type="hidden" name="id" value="<?= $item['alerta_id'] ?>">
+                    <select name="motivo" class="form-select form-select-sm">
+                        <?php foreach ($MOTIVOS as $m): ?>
+                            <option value="<?= htmlspecialchars($m) ?>"><?= htmlspecialchars($m) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    <button type="submit" class="btn btn-sm btn-danger">❌</button>
+                </form>
+            </div>
+            <?php endforeach; ?>
         </li>
-    <?php endforeach; ?>
+        <?php endforeach; ?>
     </ul>
     <?php else: ?>
         <div class="alert alert-success">No hay alertas activas para esta sucursal ✅</div>
