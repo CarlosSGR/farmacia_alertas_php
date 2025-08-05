@@ -32,7 +32,7 @@
                 <strong><?= htmlspecialchars($a['nombre']) ?></strong>
                 (<?= htmlspecialchars($a['telefono']) ?>)<br>
                 <small class="text-muted">Productos: <?= htmlspecialchars($a['productos']) ?></small><br>
-                <small class="text-muted"><strong>Fecha Próxima Llamada:</strong> <?= date('d/m/Y', strtotime($a['fecha_programada'])) ?></small>
+                <small class="text-muted"><strong>Fecha Próxima Llamada:</strong> <?= date('d/m/Y H:i', strtotime($a['fecha_programada'])) ?></small>
             </div>
             <?php foreach ($a['items'] as $item): ?>
             <div class="d-flex align-items-center mt-2 gap-2">
@@ -49,6 +49,12 @@
                         <?php endforeach; ?>
                     </select>
                     <button type="submit" class="btn btn-sm btn-danger">❌</button>
+                </form>
+                <form action="/farmacia_alertas_php/reprogramar" method="post" class="d-flex gap-2 m-0">
+                    <input type="hidden" name="id" value="<?= $item['alerta_id'] ?>">
+                    <input type="datetime-local" name="nueva_fecha" class="form-control form-control-sm">
+                    <input type="text" name="nota" class="form-control form-control-sm" placeholder="Notas (opcional)">
+                    <button type="submit" class="btn btn-sm btn-warning">⏰</button>
                 </form>
             </div>
             <?php endforeach; ?>

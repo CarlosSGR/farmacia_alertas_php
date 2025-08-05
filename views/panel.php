@@ -57,6 +57,15 @@
                 </div>
             </div>
         </div>
+        <div class="col-md-4">
+            <div class="card shadow-sm">
+                <div class="card-body text-center">
+                    <h3 class="card-title"><?= htmlspecialchars($reprogramadas) ?></h3>
+                    <p class="card-text">Llamadas reprogramadas</p>
+                    <a href="farmacia_alertas_php/alertas?reprogramadas=1" class="btn btn-warning w-100">Ver reprogramadas</a>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 </body>
