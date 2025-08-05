@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- Listado de justificaciones de no venta -->
 <html lang="es">
 <head>
     <meta charset="UTF-8">

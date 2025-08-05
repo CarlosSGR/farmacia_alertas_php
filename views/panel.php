@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- Vista del panel principal con estadísticas generales -->
 <html lang="es">
 <head>
     <meta charset="UTF-8">

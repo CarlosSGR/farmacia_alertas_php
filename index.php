@@ -1,6 +1,8 @@
 <?php
-require_once __DIR__ . '/db.php';
+// Punto de entrada de la aplicación y enrutador principal
+require_once __DIR__ . '/db.php'; // Conexión a la base de datos
 
+// Motivos válidos para registrar una justificación de no venta
 $MOTIVOS = [
     "Cliente no contestó",
     "Cliente contestó pido reprogramar",
@@ -9,9 +11,12 @@ $MOTIVOS = [
     "Otro proveedor",
 ];
 
+// Determinar ruta solicitada
 $path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+// Ajustar ruta si el proyecto vive en una subcarpeta
 $path = str_replace('/farmacia_alertas_php', '', $path);
 
+// Enrutamiento básico según la URL
 switch ($path) {
     case '/':
     case '/panel':
@@ -38,6 +43,7 @@ switch ($path) {
         show_justificaciones();
         break;
     default:
+        // Coincidencia con /alertas/sucursal/{id}
         if (preg_match('#^/alertas/sucursal/(\d+)$#', $path, $m)) {
             show_alertas_sucursal((int)$m[1]);
         } else {
@@ -47,27 +53,38 @@ switch ($path) {
         break;
 }
 
+/**
+ * Muestra el panel con estadísticas generales.
+ */
 function show_panel() {
-    $db = get_db();
+    $db = get_db(); // Reutiliza la conexión
+    // Total de alertas pendientes
     $total = $db->query("SELECT COUNT(*) FROM alerta WHERE atendida = 0")->fetchColumn();
+    // Alertas agrupadas por sucursal
     $por_sucursal = $db->query("
     SELECT sucursal_id, COUNT(*) AS cnt
     FROM alerta
     WHERE atendida = 0
     GROUP BY sucursal_id
     ")->fetchAll(PDO::FETCH_ASSOC);
+    // Total de justificaciones registradas
     $total_j = $db->query("SELECT COUNT(*) FROM justificacion_no_venta")->fetchColumn();
+    // Llamadas reprogramadas futuras
     $reprogramadas = $db->query("SELECT COUNT(*) FROM alerta WHERE fecha_programada > NOW() AND atendida = 0")->fetchColumn();
-    include __DIR__ . '/views/panel.php';
+    include __DIR__ . '/views/panel.php'; // Renderiza la vista del panel
 }
 
+/**
+ * Genera alertas de recompra y muestra las pendientes.
+ */
 function show_alertas() {
     $db = get_db();
 
+    // Primeros días del mes pasado
     $desde = (new DateTime('first day of last month'))->format('Y-m-d');
     $hasta = (new DateTime('first day of last month'))->modify('+2 days')->format('Y-m-d');
 
-
+    // Consultar ventas de productos específicos
     $stmt = $db->prepare("
         SELECT
             t1.INTCLIENTEID AS cliente_id,
@@ -89,14 +106,17 @@ function show_alertas() {
     $stmt->execute([$desde, $hasta]);
     $ventas = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+    // Crear una alerta por cada venta si no existe
     foreach ($ventas as $venta) {
         $fecha_programada = (new DateTime($venta['fecha_ultima_compra']))->modify('+30 days')->format('Y-m-d H:i:s');
         $mensaje = "Llamar a {$venta['nombre']} ({$venta['telefono']}) para ofrecerle {$venta['producto']}";
 
+        // Identificador único de la alerta
         $alerta_id = md5("{$venta['cliente_id']}-{$venta['codigo']}-{$fecha_programada}-Recompra");
 
         $check = $db->prepare("SELECT COUNT(*) FROM alerta WHERE alerta_id = ?");
         $check->execute([$alerta_id]);
+        // Registrar la alerta si no existe
 
         if ($check->fetchColumn() == 0) {
             $insert = $db->prepare("
@@ -115,9 +135,11 @@ function show_alertas() {
         }
     }
 
+    // Rango de fechas para mostrar alertas
     $hoy = date('Y-m-d');
     $tres_dias = date('Y-m-d', strtotime('+3 days'));
 
+    // Obtener alertas programadas en el rango
     $query = $db->prepare("
         SELECT * FROM alerta
         WHERE fecha_programada BETWEEN ? AND ?
@@ -126,6 +148,7 @@ function show_alertas() {
     ");
     $query->execute([$hoy, $tres_dias]);
     $alertas = $query->fetchAll(PDO::FETCH_ASSOC);
+    // Agrupar alertas por tipo para la vista
 
     $tipos = [];
     foreach ($alertas as $a) {
@@ -135,14 +158,21 @@ function show_alertas() {
     include __DIR__ . '/views/alertas.php';
 }
 
+/**
+ * Permite generar alertas manualmente.
+ */
 function generar_alertas() {
-    show_alertas(); // Ahora reutiliza la lógica de show_alertas
+    show_alertas(); // Reutiliza la lógica de show_alertas
 }
 
+/**
+ * Muestra las alertas pendientes de una sucursal específica.
+ */
 function show_alertas_sucursal(int $sucursal_id) {
     global $MOTIVOS;
     $db = get_db();
 
+    // Rango de fechas para filtrar
     $hoy = date('Y-m-d');
     $tres_dias = date('Y-m-d', strtotime('+3 days'));
 
@@ -159,6 +189,9 @@ function show_alertas_sucursal(int $sucursal_id) {
     include __DIR__ . '/views/alertas_sucursal.php';
 }
 
+/**
+ * Marca una alerta como atendida.
+ */
 function resolver_alerta() {
     $id = $_POST['id'] ?? null;
     if (!$id) {
@@ -173,6 +206,9 @@ function resolver_alerta() {
     header('Location: ' . ($_SERVER['HTTP_REFERER'] ?? '/alertas'));
 }
 
+/**
+ * Cambia la fecha programada de una alerta y guarda el historial del cambio.
+ */
 function reprogramar_alerta($id, $nueva_fecha) {
     if (!$id || !$nueva_fecha) {
         header('Location: /alertas');
@@ -204,7 +240,9 @@ function reprogramar_alerta($id, $nueva_fecha) {
     header('Location: ' . ($_SERVER['HTTP_REFERER'] ?? '/alertas'));
 }
 
-
+/**
+ * Registra un motivo por el cual no se concretó la venta y cierra la alerta.
+ */
 function registrar_no_venta() {
     global $MOTIVOS;
     $alerta_id = $_POST['id'] ?? null;
@@ -222,11 +260,15 @@ function registrar_no_venta() {
     header('Location: ' . ($_SERVER['HTTP_REFERER'] ?? '/alertas'));
 }
 
+/**
+ * Lista las justificaciones de no venta agrupadas por motivo.
+ */
 function show_justificaciones() {
     global $MOTIVOS;
     $db = get_db();
     $registros = [];
 
+    // Consultar registros por cada motivo
     foreach ($MOTIVOS as $m) {
         $stmt = $db->prepare("
             SELECT j.*, 

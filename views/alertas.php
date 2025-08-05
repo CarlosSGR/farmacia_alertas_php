@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- Listado general de alertas agrupadas por tipo -->
 <html lang="es">
 <head>
     <meta charset="UTF-8">

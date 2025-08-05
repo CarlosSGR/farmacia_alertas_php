@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- Alertas de una sucursal específica -->
 <html lang="es">
 <head>
     <meta charset="UTF-8">
